@@ -46,6 +46,7 @@ class ProcessBuilder {
      */
     build(){
         fs.ensureDirSync(this.gameDir)
+        this._injectServersDat()
         const tempNativePath = path.join(os.tmpdir(), ConfigManager.getTempNativeFolder(), crypto.pseudoRandomBytes(16).toString('hex'))
         process.throwDeprecation = true
         this.setupLiteLoader()
@@ -315,7 +316,7 @@ class ProcessBuilder {
                 `@${this.forgeModListFile}`
             ] : [
                 '--fml.mavenRoots',
-                path.join('..', '..', 'common', 'modstore'),
+                path.join('..', '..', 'common', 'modstore') + path.delimiter + path.join('..', '..', 'common', 'libraries'),
                 '--fml.modLists',
                 this.forgeModListFile
             ]
@@ -675,13 +676,14 @@ class ProcessBuilder {
     classpathArg(mods, tempNativePath){
         let cpArgs = []
 
+        // NeoForge 1.17+ uses a patched client JAR (neoforge-X.X.X-client.jar) declared as a Library
+        // sub-module in distribution.json. Do NOT add the vanilla version.jar here for 1.17+ NeoForge —
+        // it lacks Automatic-Module-Name and would conflict with the patched client in the module layer.
         if(!mcVersionAtLeast('1.17', this.server.rawServer.minecraftVersion) || this.usingFabricLoader) {
-            // Add the version.jar to the classpath.
-            // Must not be added to the classpath for Forge 1.17+.
             const version = this.vanillaManifest.id
             cpArgs.push(path.join(this.commonDir, 'versions', version, version + '.jar'))
         }
-        
+
 
         if(this.usingLiteLoader){
             cpArgs.push(this.llPath)
@@ -885,6 +887,39 @@ class ProcessBuilder {
             }
         }
         return libs
+    }
+
+    /**
+     * Injecte automatiquement BranlyCraft dans servers.dat si pas encore présent.
+     * Crée le fichier s'il n'existe pas, sinon vérifie si le serveur est déjà dans la liste.
+     */
+    _injectServersDat() {
+        const serversDatPath = path.join(this.gameDir, 'servers.dat')
+        const serverIp = this.server.rawServer.address
+
+        // servers.dat pré-généré (NBT) pour BranlyCraft Saison 2 - game2.verycloud.fr:25567
+        const SERVERS_DAT_B64 = 'CgAACQAHc2VydmVycwoAAAABCAAEbmFtZQAUQnJhbmx5Q3JhZnQgU2Fpc29uIDIIAAJpcAAYZ2FtZTIudmVyeWNsb3VkLmZyOjI1NTY3AQAOYWNjZXB0VGV4dHVyZXMBAAA='
+
+        try {
+            if (!fs.existsSync(serversDatPath)) {
+                // Fichier inexistant → créer avec BranlyCraft
+                fs.writeFileSync(serversDatPath, Buffer.from(SERVERS_DAT_B64, 'base64'))
+                logger.info(`servers.dat créé pour ${serverIp}`)
+            } else {
+                // Fichier existant → vérifier si BranlyCraft est déjà dedans
+                const existing = fs.readFileSync(serversDatPath)
+                const ipBuf = Buffer.from(serverIp, 'utf8')
+                if (!existing.includes(ipBuf)) {
+                    // Pas encore dedans → réécrire avec BranlyCraft uniquement
+                    fs.writeFileSync(serversDatPath, Buffer.from(SERVERS_DAT_B64, 'base64'))
+                    logger.info(`servers.dat mis à jour avec ${serverIp}`)
+                } else {
+                    logger.info(`${serverName} déjà présent dans servers.dat`)
+                }
+            }
+        } catch(err) {
+            logger.warn('Impossible de modifier servers.dat:', err)
+        }
     }
 
 }
