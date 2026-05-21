@@ -1579,6 +1579,9 @@ const settingsUpdateTitle          = document.getElementById('settingsUpdateTitl
 const settingsUpdateVersionCheck   = document.getElementById('settingsUpdateVersionCheck')
 const settingsUpdateVersionTitle   = document.getElementById('settingsUpdateVersionTitle')
 const settingsUpdateVersionValue   = document.getElementById('settingsUpdateVersionValue')
+const settingsUpdateChangelogTitle = settingsTabUpdate.getElementsByClassName('settingsChangelogTitle')[0]
+const settingsUpdateChangelogText  = settingsTabUpdate.getElementsByClassName('settingsChangelogText')[0]
+const settingsUpdateChangelogCont  = settingsTabUpdate.getElementsByClassName('settingsChangelogContainer')[0]
 const settingsUpdateActionButton   = document.getElementById('settingsUpdateActionButton')
 
 /**
@@ -1604,6 +1607,13 @@ function settingsUpdateButtonStatus(text, disabled = false, handler = null){
 function populateSettingsUpdateInformation(data){
     if(data != null){
         settingsUpdateTitle.innerHTML = isPrerelease(data.version) ? Lang.queryJS('settings.updates.newPreReleaseTitle') : Lang.queryJS('settings.updates.newReleaseTitle')
+        if(data.releaseName){
+            settingsUpdateChangelogCont.style.display = null
+            settingsUpdateChangelogTitle.innerHTML = data.releaseName
+            settingsUpdateChangelogText.innerHTML = data.releaseNotes || ''
+        } else {
+            settingsUpdateChangelogCont.style.display = 'none'
+        }
         populateVersionInformation(data.version, settingsUpdateVersionValue, settingsUpdateVersionTitle, settingsUpdateVersionCheck)
         
         if(process.platform === 'darwin'){
@@ -1627,6 +1637,7 @@ function populateSettingsUpdateInformation(data){
         }
     } else {
         settingsUpdateTitle.innerHTML = Lang.queryJS('settings.updates.latestVersionTitle')
+        settingsUpdateChangelogCont.style.display = 'none'
         populateVersionInformation(remote.app.getVersion(), settingsUpdateVersionValue, settingsUpdateVersionTitle, settingsUpdateVersionCheck)
         settingsUpdateButtonStatus(Lang.queryJS('settings.updates.checkForUpdatesButton'), false, () => {
             if(!isDev){
