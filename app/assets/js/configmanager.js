@@ -7,7 +7,7 @@ const logger = LoggerUtil.getLogger('ConfigManager')
 
 const sysRoot = process.env.APPDATA || (process.platform == 'darwin' ? process.env.HOME + '/Library/Application Support' : process.env.HOME)
 
-const dataPath = path.join(sysRoot, '.helioslauncher')
+const dataPath = path.join(sysRoot, '.branlycraftlauncher')
 
 const launcherDir = require('@electron/remote').app.getPath('userData')
 
@@ -86,7 +86,10 @@ const DEFAULT_CONFIG = {
         },
         launcher: {
             allowPrerelease: false,
-            dataDirectory: dataPath
+            dataDirectory: dataPath,
+            accentColor: 'teal',
+            background: null,
+            playtimeMs: 0
         }
     },
     newsCache: {
@@ -790,4 +793,29 @@ exports.getAllowPrerelease = function(def = false){
  */
 exports.setAllowPrerelease = function(allowPrerelease){
     config.settings.launcher.allowPrerelease = allowPrerelease
+}
+
+exports.getAccentColor = function(def = false){
+    return !def ? (config.settings.launcher.accentColor || 'teal') : DEFAULT_CONFIG.settings.launcher.accentColor
+}
+
+exports.setAccentColor = function(accentColor){
+    config.settings.launcher.accentColor = accentColor
+}
+
+exports.getBackground = function(){
+    const v = config.settings.launcher.background
+    return (v !== undefined && v !== null) ? v : null
+}
+
+exports.setBackground = function(id){
+    config.settings.launcher.background = id
+}
+
+exports.getTotalPlaytime = function(){
+    return config.settings.launcher.playtimeMs || 0
+}
+
+exports.addPlaytime = function(ms){
+    config.settings.launcher.playtimeMs = (config.settings.launcher.playtimeMs || 0) + ms
 }

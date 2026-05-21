@@ -720,7 +720,137 @@ async function resolveModsForUI(){
 
     document.getElementById('settingsReqModsContent').innerHTML = modStr.reqMods
     document.getElementById('settingsOptModsContent').innerHTML = modStr.optMods
+
+    // Update count badges
+    const reqCount = document.getElementById('settingsReqModsContent').querySelectorAll('.settingsMod, .settingsSubMod').length
+    const optCount = document.getElementById('settingsOptModsContent').querySelectorAll('.settingsMod, .settingsSubMod').length
+    const reqBadge = document.getElementById('bcReqModCount')
+    const optBadge = document.getElementById('bcOptModCount')
+    if(reqBadge) reqBadge.textContent = reqCount
+    if(optBadge) optBadge.textContent = optCount
+
+    // Relance la recherche après rechargement des mods
+    runModSearch()
 }
+
+// ── Recherche intelligente de mods (fuzzy search) ────────────────────────────
+
+/**
+ * Score de correspondance entre un nom de mod et une requête.
+ * Retourne un score > 0 si correspondance, 0 sinon.
+ * Ordre de priorité :
+ *   3 = correspondance directe (substring)
+ *   2 = tous les mots de la requête sont dans le nom
+ *   1 = correspondance floue (tous les caractères apparaissent dans l'ordre)
+ *   0 = aucune correspondance
+ */
+function modFuzzyScore(name, query) {
+    if (!query) return 3
+    const n = name.toLowerCase()
+    const q = query.toLowerCase().trim()
+    if (!q) return 3
+
+    // 1. Correspondance directe
+    if (n.includes(q)) return 3
+
+    // 2. Tous les mots de la requête trouvés dans le nom
+    const words = q.split(/\s+/)
+    if (words.length > 1 && words.every(w => n.includes(w))) return 2
+
+    // 3. Fuzzy : chaque caractère de la requête apparaît dans l'ordre dans le nom
+    let qi = 0
+    for (let i = 0; i < n.length && qi < q.length; i++) {
+        if (n[i] === q[qi]) qi++
+    }
+    if (qi === q.length) return 1
+
+    return 0
+}
+
+function runModSearch() {
+    const input          = document.getElementById('modSearchInput')
+    const clear          = document.getElementById('modSearchClear')
+    const count          = document.getElementById('modSearchCount')
+    const reqContent     = document.getElementById('settingsReqModsContent')
+    const optContent     = document.getElementById('settingsOptModsContent')
+    const reqContainer   = document.getElementById('settingsReqModsContainer')
+    const optContainer   = document.getElementById('settingsOptModsContainer')
+    const dropinContent  = document.getElementById('settingsDropinModsContent')
+    const dropinContainer= document.getElementById('settingsDropinModsContainer')
+    if (!input) return
+
+    const q = input.value.trim()
+    if (clear) clear.style.display = q ? '' : 'none'
+
+    let totalVisible = 0
+
+    // ── 1. Filtrer uniquement les feuilles .settingsSubMod ──────────────────────
+    // Ne pas toucher aux parents .settingsMod ici — sinon cacher le parent
+    // cache visuellement tous ses enfants même s'ils sont individuellement visibles.
+    const subMods = document.querySelectorAll(
+        '#settingsReqModsContent .settingsSubMod,' +
+        '#settingsOptModsContent .settingsSubMod'
+    )
+    subMods.forEach(mod => {
+        const name  = mod.querySelector('.settingsModName')?.textContent?.trim() || ''
+        const score = modFuzzyScore(name, q)
+        mod.style.display = score > 0 ? '' : 'none'
+        if (score > 0) totalVisible++
+    })
+
+    // ── 2. Afficher/masquer les conteneurs parents .settingsMod ────────────────
+    // Un parent reste visible si au moins un de ses enfants correspond OU si la
+    // requête est vide.
+    const parentMods = document.querySelectorAll(
+        '#settingsReqModsContent .settingsMod,' +
+        '#settingsOptModsContent .settingsMod'
+    )
+    parentMods.forEach(parent => {
+        if (!q) { parent.style.display = ''; return }
+        const hasVisibleChild = Array.from(parent.querySelectorAll('.settingsSubMod'))
+            .some(m => m.style.display !== 'none')
+        parent.style.display = hasVisibleChild ? '' : 'none'
+    })
+
+    // ── 3. Filtrer les mods DROP-IN ─────────────────────────────────────────────
+    let dropinVisible = 0
+    if (dropinContent) {
+        dropinContent.querySelectorAll('.settingsDropinMod').forEach(mod => {
+            const name  = mod.querySelector('.settingsModName')?.textContent?.trim() || ''
+            const score = modFuzzyScore(name, q)
+            mod.style.display = score > 0 ? '' : 'none'
+            if (score > 0) { totalVisible++; dropinVisible++ }
+        })
+    }
+
+    // ── 4. Mettre à jour visibilité des sections et badges ──────────────────────
+    ;[
+        { content: reqContent,    container: reqContainer,    badge: 'bcReqModCount' },
+        { content: optContent,    container: optContainer,    badge: 'bcOptModCount' },
+    ].forEach(({ content, container, badge }) => {
+        if (!content || !container) return
+        const allSub  = content.querySelectorAll('.settingsSubMod')
+        const visSub  = Array.from(allSub).filter(m => m.style.display !== 'none').length
+        container.style.display = (visSub > 0 || !q) ? '' : 'none'
+        const b = document.getElementById(badge)
+        if (b) b.textContent = q ? visSub : allSub.length
+    })
+
+    if (dropinContainer) {
+        dropinContainer.style.display = (dropinVisible > 0 || !q) ? '' : 'none'
+    }
+
+    if (count) count.textContent = q ? `${totalVisible} résultat${totalVisible !== 1 ? 's' : ''}` : ''
+}
+
+// Attache les événements (le DOM est déjà prêt dans le contexte Electron)
+;(function attachModSearch() {
+    const input = document.getElementById('modSearchInput')
+    const clear = document.getElementById('modSearchClear')
+    if (!input) return
+    input.addEventListener('input', runModSearch)
+    if (clear) clear.addEventListener('click', () => { input.value = ''; input.focus(); runModSearch() })
+})()
 
 /**
  * Recursively build the mod UI elements.
@@ -743,16 +873,13 @@ function parseModulesForUI(mdls, submodules, servConf){
                 reqMods += `<div id="${mdl.getVersionlessMavenIdentifier()}" class="settingsBaseMod settings${submodules ? 'Sub' : ''}Mod" enabled>
                     <div class="settingsModContent">
                         <div class="settingsModMainWrapper">
-                            <div class="settingsModStatus"></div>
+                            <div class="bc-mod-icon">${mdl.rawModule.name.charAt(0).toUpperCase()}</div>
                             <div class="settingsModDetails">
                                 <span class="settingsModName">${mdl.rawModule.name}</span>
                                 <span class="settingsModVersion">v${mdl.mavenComponents.version}</span>
                             </div>
                         </div>
-                        <label class="toggleSwitch" reqmod>
-                            <input type="checkbox" checked>
-                            <span class="toggleSwitchSlider"></span>
-                        </label>
+                        <span class="bc-mod-required-badge">Requis</span>
                     </div>
                     ${mdl.subModules.length > 0 ? `<div class="settingsSubModContainer">
                         ${Object.values(parseModulesForUI(mdl.subModules, true, servConf[mdl.getVersionlessMavenIdentifier()])).join('')}
@@ -767,7 +894,7 @@ function parseModulesForUI(mdls, submodules, servConf){
                 optMods += `<div id="${mdl.getVersionlessMavenIdentifier()}" class="settingsBaseMod settings${submodules ? 'Sub' : ''}Mod" ${val ? 'enabled' : ''}>
                     <div class="settingsModContent">
                         <div class="settingsModMainWrapper">
-                            <div class="settingsModStatus"></div>
+                            <div class="bc-mod-icon">${mdl.rawModule.name.charAt(0).toUpperCase()}</div>
                             <div class="settingsModDetails">
                                 <span class="settingsModName">${mdl.rawModule.name}</span>
                                 <span class="settingsModVersion">v${mdl.mavenComponents.version}</span>
@@ -866,12 +993,10 @@ async function resolveDropinModsForUI(){
         dropinMods += `<div id="${dropin.fullName}" class="settingsBaseMod settingsDropinMod" ${!dropin.disabled ? 'enabled' : ''}>
                     <div class="settingsModContent">
                         <div class="settingsModMainWrapper">
-                            <div class="settingsModStatus"></div>
+                            <div class="bc-mod-icon bc-mod-icon-dropin">${dropin.name.charAt(0).toUpperCase()}</div>
                             <div class="settingsModDetails">
                                 <span class="settingsModName">${dropin.name}</span>
-                                <div class="settingsDropinRemoveWrapper">
-                                    <button class="settingsDropinRemoveButton" remmod="${dropin.fullName}">${Lang.queryJS('settings.dropinMods.removeButton')}</button>
-                                </div>
+                                <button class="settingsDropinRemoveButton" remmod="${dropin.fullName}">${Lang.queryJS('settings.dropinMods.removeButton')}</button>
                             </div>
                         </div>
                         <label class="toggleSwitch">
@@ -1397,15 +1522,6 @@ async function prepareJavaTab(){
  */
 
 const settingsTabAbout             = document.getElementById('settingsTabAbout')
-const settingsAboutChangelogTitle  = settingsTabAbout.getElementsByClassName('settingsChangelogTitle')[0]
-const settingsAboutChangelogText   = settingsTabAbout.getElementsByClassName('settingsChangelogText')[0]
-const settingsAboutChangelogButton = settingsTabAbout.getElementsByClassName('settingsChangelogButton')[0]
-
-// Bind the devtools toggle button.
-document.getElementById('settingsAboutDevToolsButton').onclick = (e) => {
-    let window = remote.getCurrentWindow()
-    window.toggleDevTools()
-}
 
 /**
  * Return whether or not the provided version is a prerelease.
@@ -1448,41 +1564,10 @@ function populateAboutVersionInformation(){
 }
 
 /**
- * Fetches the GitHub atom release feed and parses it for the release notes
- * of the current version. This value is displayed on the UI.
- */
-function populateReleaseNotes(){
-    $.ajax({
-        url: 'https://github.com/dscalzi/HeliosLauncher/releases.atom',
-        success: (data) => {
-            const version = 'v' + remote.app.getVersion()
-            const entries = $(data).find('entry')
-            
-            for(let i=0; i<entries.length; i++){
-                const entry = $(entries[i])
-                let id = entry.find('id').text()
-                id = id.substring(id.lastIndexOf('/')+1)
-
-                if(id === version){
-                    settingsAboutChangelogTitle.innerHTML = entry.find('title').text()
-                    settingsAboutChangelogText.innerHTML = entry.find('content').text()
-                    settingsAboutChangelogButton.href = entry.find('link').attr('href')
-                }
-            }
-
-        },
-        timeout: 2500
-    }).catch(err => {
-        settingsAboutChangelogText.innerHTML = Lang.queryJS('settings.about.releaseNotesFailed')
-    })
-}
-
-/**
  * Prepare account tab for display.
  */
 function prepareAboutTab(){
     populateAboutVersionInformation()
-    populateReleaseNotes()
 }
 
 /**
@@ -1494,9 +1579,6 @@ const settingsUpdateTitle          = document.getElementById('settingsUpdateTitl
 const settingsUpdateVersionCheck   = document.getElementById('settingsUpdateVersionCheck')
 const settingsUpdateVersionTitle   = document.getElementById('settingsUpdateVersionTitle')
 const settingsUpdateVersionValue   = document.getElementById('settingsUpdateVersionValue')
-const settingsUpdateChangelogTitle = settingsTabUpdate.getElementsByClassName('settingsChangelogTitle')[0]
-const settingsUpdateChangelogText  = settingsTabUpdate.getElementsByClassName('settingsChangelogText')[0]
-const settingsUpdateChangelogCont  = settingsTabUpdate.getElementsByClassName('settingsChangelogContainer')[0]
 const settingsUpdateActionButton   = document.getElementById('settingsUpdateActionButton')
 
 /**
@@ -1522,9 +1604,6 @@ function settingsUpdateButtonStatus(text, disabled = false, handler = null){
 function populateSettingsUpdateInformation(data){
     if(data != null){
         settingsUpdateTitle.innerHTML = isPrerelease(data.version) ? Lang.queryJS('settings.updates.newPreReleaseTitle') : Lang.queryJS('settings.updates.newReleaseTitle')
-        settingsUpdateChangelogCont.style.display = null
-        settingsUpdateChangelogTitle.innerHTML = data.releaseName
-        settingsUpdateChangelogText.innerHTML = data.releaseNotes
         populateVersionInformation(data.version, settingsUpdateVersionValue, settingsUpdateVersionTitle, settingsUpdateVersionCheck)
         
         if(process.platform === 'darwin'){
@@ -1532,11 +1611,22 @@ function populateSettingsUpdateInformation(data){
                 shell.openExternal(data.darwindownload)
             })
         } else {
-            settingsUpdateButtonStatus(Lang.queryJS('settings.updates.downloadingButton'), true)
+            settingsUpdateButtonStatus(Lang.queryJS('settings.updates.downloadButton'), false, () => {
+                if(!isDev){
+                    ipcRenderer.send('autoUpdateAction', 'downloadUpdate')
+                    settingsUpdateButtonStatus('Téléchargement…', true)
+                    // Affiche la barre indéterminée immédiatement
+                    const progressCont = document.getElementById('settingsUpdateProgressContainer')
+                    const progressFill = document.getElementById('settingsUpdateProgressFill')
+                    const progressText = document.getElementById('settingsUpdateProgressText')
+                    if(progressCont) progressCont.style.display = 'flex'
+                    if(progressFill) progressFill.classList.add('indeterminate')
+                    if(progressText) progressText.textContent = '…'
+                }
+            })
         }
     } else {
         settingsUpdateTitle.innerHTML = Lang.queryJS('settings.updates.latestVersionTitle')
-        settingsUpdateChangelogCont.style.display = 'none'
         populateVersionInformation(remote.app.getVersion(), settingsUpdateVersionValue, settingsUpdateVersionTitle, settingsUpdateVersionCheck)
         settingsUpdateButtonStatus(Lang.queryJS('settings.updates.checkForUpdatesButton'), false, () => {
             if(!isDev){

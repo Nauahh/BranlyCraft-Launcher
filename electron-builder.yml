@@ -52,6 +52,5 @@ directories:
   output: 'dist'
 
 publish:
-  provider: github
-  owner: Nauahh
-  repo: BranlyCraft-Launcher
+  provider: generic
+  url: https://pub-81ad36ee8c1740f2bc5e6576c8d2681b.r2.dev/branlycraft-launcher

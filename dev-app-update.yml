@@ -1,4 +1,3 @@
-owner: Nauahh
-repo: BranlyCraft-Launcher
-provider: github
+provider: generic
+url: https://pub-81ad36ee8c1740f2bc5e6576c8d2681b.r2.dev/branlycraft-launcher
 updaterCacheDirName: branlycraftlauncher-updater

@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<style>
+* { margin:0; padding:0; }
+html,body { width:100%; height:100%; background:#06040f; overflow:hidden; -webkit-app-region:drag; }
+#c { display:block; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+'use strict'
+const { ipcRenderer } = require('electron')
+
+const W = window.innerWidth, H = window.innerHeight
+const cv = document.getElementById('c')
+cv.width = W; cv.height = H
+const ctx = cv.getContext('2d')
+ctx.imageSmoothingEnabled = false
+
+// ── Police pixel (5×7) ───────────────────────────────────────────────────────
+const FONT = {
+  B:['11110','10001','10001','11110','10001','10001','11110'],
+  r:['00000','10110','11001','10000','10000','10000','00000'],
+  a:['00000','01110','00001','01111','10001','10001','01111'],
+  n:['00000','10110','11001','10001','10001','10001','00000'],
+  l:['01100','00100','00100','00100','00100','00100','01110'],
+  y:['00000','10001','10001','01111','00001','10001','01110'],
+  C:['01110','10001','10000','10000','10000','10001','01110'],
+  f:['00110','01000','01000','11100','01000','01000','01000'],
+  t:['01000','11110','01000','01000','01000','01001','00110'],
+  S:['01110','10001','10000','01110','00001','10001','01110'],
+  i:['00100','00000','01100','00100','00100','00100','01110'],
+  o:['00000','01110','10001','10001','10001','10001','01110'],
+  s:['00000','01110','10000','01110','00001','10001','01110'],
+  e:['00000','01110','10001','11111','10000','10000','01110'],
+  '2':['01110','10001','00001','00110','01000','10000','11111'],
+  ' ':['00000','00000','00000','00000','00000','00000','00000'],
+  '✦':['00100','01110','11111','01110','11111','01110','00100'],
+  O:['01110','10001','10001','10001','10001','10001','01110'],
+  M:['10001','11011','10101','10001','10001','10001','10001'],
+  '!':['00100','00100','00100','00100','00000','01100','01100'],
+}
+const _UNK=['11111','10001','10001','10001','10001','10001','11111']
+const _gc={}
+function glyph(ch,px,fg,sh){
+  const k=ch+px+fg+sh; if(_gc[k])return _gc[k]
+  const rows=FONT[ch]||_UNK, cw=rows[0].length
+  const oc=document.createElement('canvas'); oc.width=(cw+1)*px; oc.height=8*px
+  const c2=oc.getContext('2d'); c2.imageSmoothingEnabled=false
+  rows.forEach((row,ry)=>row.split('').forEach((b,rx)=>{
+    if(b!=='1')return
+    c2.fillStyle=sh; c2.fillRect((rx+1)*px,(ry+1)*px,px,px)
+    c2.fillStyle=fg; c2.fillRect(rx*px,ry*px,px,px)
+  }))
+  return(_gc[k]=oc)
+}
+function textW(str,px){return str.split('').reduce((a,ch)=>a+((FONT[ch]||_UNK)[0].length+1)*px,-px)}
+function drawTxt(c2,str,x,y,px,fg,sh){
+  let cx=x; str.split('').forEach(ch=>{c2.drawImage(glyph(ch,px,fg,sh),Math.round(cx),Math.round(y));cx+=((FONT[ch]||_UNK)[0].length+1)*px})
+}
+
+// ── Background (offscreen, rendu 1 fois) ─────────────────────────────────────
+const bgc=document.createElement('canvas'); bgc.width=W; bgc.height=H
+const bx=bgc.getContext('2d')
+bx.fillStyle='#06040f'; bx.fillRect(0,0,W,H)
+const gL=bx.createRadialGradient(-40,0,0,-40,0,360); gL.addColorStop(0,'#5b21b630'); gL.addColorStop(1,'rgba(0,0,0,0)')
+bx.fillStyle=gL; bx.fillRect(0,0,W,H)
+const gR=bx.createRadialGradient(W+40,H,0,W+40,H,320); gR.addColorStop(0,'#0e749128'); gR.addColorStop(1,'rgba(0,0,0,0)')
+bx.fillStyle=gR; bx.fillRect(0,0,W,H)
+
+// ── TNT (16×16 — texture fidèle au jeu) ──────────────────────────────────────
+// 1=rouge  2=rouge foncé/bordure  3=noir(texte)  4=rouge moyen  5=blanc(bande centrale)
+const TNT_GRID=[
+  [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],  // bordure
+  [2,1,4,1,4,1,4,1,4,1,4,1,4,1,4,2],  // checker
+  [2,4,1,4,1,4,1,4,1,4,1,4,1,4,1,2],  // checker
+  [2,1,4,1,4,1,4,1,4,1,4,1,4,1,4,2],  // checker
+  [2,4,1,4,1,4,1,4,1,4,1,4,1,4,1,2],  // checker
+  [2,5,5,5,5,5,5,5,5,5,5,5,5,5,5,2],  // blanc spacer
+  [2,5,3,3,3,5,3,5,3,5,3,3,3,5,5,2],  // T haut  N haut  T haut
+  [2,5,5,3,5,5,3,3,3,5,5,3,5,5,5,2],  // T tige  N crois T tige
+  [2,5,5,3,5,5,3,5,3,5,5,3,5,5,5,2],  // tiges
+  [2,5,5,3,5,5,3,5,3,5,5,3,5,5,5,2],  // tiges
+  [2,5,5,3,5,5,3,5,3,5,5,3,5,5,5,2],  // tiges
+  [2,1,4,1,4,1,4,1,4,1,4,1,4,1,4,2],  // checker
+  [2,4,1,4,1,4,1,4,1,4,1,4,1,4,1,2],  // checker
+  [2,1,4,1,4,1,4,1,4,1,4,1,4,1,4,2],  // checker
+  [2,4,1,4,1,4,1,4,1,4,1,4,1,4,1,2],  // checker
+  [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],  // bordure
+]
+const TNT_PAL={1:'#C8311B',2:'#6B1309',3:'#111111',4:'#A02318',5:'#F2F2F2'}
+const TNT_PAL_F={1:'#ffffff',2:'#dddddd',3:'#999999',4:'#eeeeee',5:'#ffffff'}  // flash
+const TS=4  // scale
+const TW=16*TS, TH=16*TS
+const TX=Math.round(W/2-TW/2), TNT_BASE_Y=Math.round(H/2-100)
+
+function drawTNT(x,y,flash){
+  const pal=flash?TNT_PAL_F:TNT_PAL
+  TNT_GRID.forEach((row,ry)=>row.forEach((col,rx)=>{
+    if(!col)return
+    ctx.fillStyle=pal[col]; ctx.fillRect(x+rx*TS,y+ry*TS,TS,TS)
+  }))
+}
+
+// ── Titre BranlyCraft (pré-rendu avec glow une fois) ─────────────────────────
+const TITLE='BranlyCraft', TPX=5
+let titleCanvas=null, titleX=0, titleY=0
+
+function buildTitleCanvas(){
+  const tw=textW(TITLE,TPX), th=7*TPX
+  const pad=10
+  const oc=document.createElement('canvas')
+  oc.width=tw+pad*2+TPX; oc.height=th+pad*2+TPX
+  const c2=oc.getContext('2d'); c2.imageSmoothingEnabled=false
+  // Glow (4 passes, du plus grand au plus petit offset)
+  [[0.05,4],[0.10,3],[0.18,2],[0.28,1]].forEach(([a,d])=>{
+    c2.globalAlpha=a
+    for(let dx=-d;dx<=d;dx+=d||1) for(let dy=-d;dy<=d;dy+=d||1){
+      if(dx===0&&dy===0)continue
+      drawTxt(c2,TITLE,pad+dx,pad+dy,TPX,'#8b5cf6','rgba(0,0,0,0)')
+    }
+  })
+  c2.globalAlpha=1
+  drawTxt(c2,TITLE,pad,pad,TPX,'#ffffff','#2a2050')
+  // Shimmer initial (léger reflet diagonal)
+  c2.globalAlpha=0.12
+  c2.fillStyle='#ffffff'
+  for(let i=0;i<tw;i+=2){c2.fillRect(pad+i,pad,1,th)}
+  c2.globalAlpha=1
+  titleCanvas=oc
+  titleX=Math.round(W/2-tw/2)-pad
+  titleY=Math.round(H/2-th/2)-pad
+}
+
+// ── Lettres tombantes ─────────────────────────────────────────────────────────
+const TGAP=2
+let letters=[], subtitleA=0
+
+function initLetters(fromX,fromY){
+  const tw=textW(TITLE,TPX)
+  let lx=Math.round(W/2-tw/2)
+  const tgtY=Math.round(H/2-7*TPX/2)
+  TITLE.split('').forEach((ch,i)=>{
+    letters.push({
+      ch,
+      x:lx, y:fromY,
+      vy:-(3+Math.random()*4),
+      tgt:tgtY, delay:i*60, at:0, done:false
+    })
+    lx+=((FONT[ch]||_UNK)[0].length+TGAP)*TPX
+  })
+}
+
+// ── Particules explosion ──────────────────────────────────────────────────────
+const PCOLS=['#E83030','#C01010','#FF6600','#FFD700','#FF8800','#888888','#555555','#FFAA00']
+let parts=[]
+function spawnBoom(ex,ey){
+  for(let i=0;i<70;i++){
+    const a=Math.random()*Math.PI*2, spd=2+Math.random()*12
+    parts.push({
+      x:ex,y:ey,
+      vx:Math.cos(a)*spd, vy:Math.sin(a)*spd-3,
+      life:1, decay:.006+Math.random()*.014,
+      sz:3+Math.floor(Math.random()*6),
+      col:PCOLS[Math.floor(Math.random()*PCOLS.length)]
+    })
+  }
+}
+
+// ── Progress bar (offscreen) ──────────────────────────────────────────────────
+const pbc=document.createElement('canvas'); pbc.width=W; pbc.height=3
+const pbx=pbc.getContext('2d')
+const pbg=pbx.createLinearGradient(0,0,W,0)
+pbg.addColorStop(0,'#790000'); pbg.addColorStop(.4,'#D42020'); pbg.addColorStop(.8,'#FF8800'); pbg.addColorStop(1,'#FFD700')
+pbx.fillStyle=pbg; pbx.fillRect(0,0,W,3)
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let STATE='drop', t0=0
+let tntY=-(TH+40), tntVY=0          // TNT drop
+let sparkY=0, FUSE_LEN=36            // fuse
+let flashOn=false, flashT=0, flashMs=150
+let whiteA=0, boomA=0, revStart=0
+let subtitleShown=false
+let fadeA=0, done=false
+let barVal=0, barTgt=0
+let shimmerX=0, shimmerDir=1
+
+setTimeout(()=>barTgt=0.25,300)
+setTimeout(()=>barTgt=0.55,2000)
+setTimeout(()=>barTgt=0.82,3500)
+setTimeout(()=>barTgt=1.0, 5500)
+
+const LBLS=['Chargement','Initialisation','Connexion','Pret !']
+let lblI=0, lblA=1
+const lt=setInterval(()=>{if(++lblI>=LBLS.length){clearInterval(lt);return};lblA=0;setTimeout(()=>lblA=1,280)},1500)
+
+// ── Son ───────────────────────────────────────────────────────────────────────
+function playSound(){
+  try{
+    const ac=new(window.AudioContext||window.webkitAudioContext)()
+    const mg=ac.createGain()
+    mg.gain.setValueAtTime(0,0); mg.gain.linearRampToValueAtTime(0.12,0.1)
+    mg.gain.setValueAtTime(0.12,5.5); mg.gain.linearRampToValueAtTime(0,7)
+    mg.connect(ac.destination)
+    [[392,.1,3],[493.88,.4,2.8],[587.33,.7,3.2]].forEach(([f,t,d])=>{
+      const o=ac.createOscillator(),g=ac.createGain()
+      o.type='sine';o.frequency.value=f
+      g.gain.setValueAtTime(0,ac.currentTime+t)
+      g.gain.linearRampToValueAtTime(.2,ac.currentTime+t+.08)
+      g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+t+d)
+      o.connect(g);g.connect(mg);o.start(ac.currentTime+t);o.stop(ac.currentTime+t+d+.1)
+    })
+  }catch(e){}
+}
+
+// ── Loop ──────────────────────────────────────────────────────────────────────
+let lastT=0
+function loop(now){
+  if(done)return
+  requestAnimationFrame(loop)
+  const dt=Math.min(now-lastT,50); lastT=now
+  const el=now-t0
+
+  ctx.drawImage(bgc,0,0)
+
+  // ── DROP : TNT tombe depuis le haut ──────────────────────────────────────
+  if(STATE==='drop'){
+    tntVY+=0.4*dt/16
+    tntY+=tntVY*dt/16
+    if(tntY>=TNT_BASE_Y){
+      tntY=TNT_BASE_Y; tntVY=-tntVY*.45
+      if(Math.abs(tntVY)<0.6){tntY=TNT_BASE_Y;tntVY=0;STATE='burn';t0=now;sparkY=tntY-FUSE_LEN}
+    }
+    drawTNT(TX,Math.round(tntY),false)
+  }
+
+  // ── BURN : mèche qui brûle ──────────────────────────────────────────────
+  else if(STATE==='burn'){
+    const prog=Math.min(el/1600,1)
+    sparkY=tntY-FUSE_LEN+(FUSE_LEN*prog)
+    const fuseRemain=Math.round(tntY-sparkY)
+    const fcx=TX+TW/2
+
+    // Mèche restante
+    if(fuseRemain>0){
+      ctx.fillStyle='#886600'
+      ctx.fillRect(Math.round(fcx)-1,Math.round(sparkY),2,fuseRemain)
+    }
+    // Étincelle
+    const sx=Math.round(fcx-3), sy=Math.round(sparkY-3)
+    ctx.globalAlpha=0.35; ctx.fillStyle='#FF6600'
+    ctx.fillRect(sx-2,sy-2,11,11); ctx.globalAlpha=1
+    ctx.fillStyle='#FFD700'; ctx.fillRect(sx,sy,7,7)
+    ctx.fillStyle='#FFFFFF'; ctx.fillRect(sx+2,sy+2,3,3)
+
+    drawTNT(TX,tntY,false)
+    if(prog>=1){STATE='flash';t0=now;flashT=now}
+  }
+
+  // ── FLASH : TNT clignote ─────────────────────────────────────────────────
+  else if(STATE==='flash'){
+    const prog=Math.min(el/700,1)
+    flashMs=140-100*prog
+    if(now-flashT>flashMs){flashOn=!flashOn;flashT=now}
+    drawTNT(TX,tntY,flashOn)
+    if(prog>=1){
+      STATE='explode';t0=now
+      spawnBoom(TX+TW/2,tntY+TH/2)
+      initLetters(TX+TW/2,tntY+TH/2)
+      whiteA=1;boomA=1
+    }
+  }
+
+  // ── EXPLODE ───────────────────────────────────────────────────────────────
+  else if(STATE==='explode'){
+    if(whiteA>0){
+      whiteA=Math.max(0,1-el/180)
+      ctx.fillStyle='#ffffff';ctx.globalAlpha=whiteA;ctx.fillRect(0,0,W,H);ctx.globalAlpha=1
+    }
+    if(boomA>0){
+      boomA=Math.max(0,1-el/450)
+      const bw=textW('BOOM!',5)
+      ctx.globalAlpha=boomA;drawTxt(ctx,'BOOM!',Math.round((W-bw)/2),Math.round(H/2-18),5,'#FFD700','#8b0000');ctx.globalAlpha=1
+    }
+    if(el>320){STATE='reveal';t0=now;revStart=now}
+  }
+
+  // ── REVEAL + IDLE ────────────────────────────────────────────────────────
+  else if(STATE==='reveal'||STATE==='idle'){
+    let allDone=true
+    letters.forEach(l=>{
+      if(!l.at&&now-revStart>=l.delay)l.at=now
+      if(!l.at){allDone=false;return}
+      if(!l.done){
+        allDone=false
+        l.vy+=0.42; l.y+=l.vy
+        if(l.y>=l.tgt){
+          l.y=l.tgt;l.vy*=-.38
+          if(Math.abs(l.vy)<0.8){l.done=true;l.y=l.tgt}
+        }
+      }
+    })
+
+    // Quand toutes les lettres sont posées → afficher le canvas pré-rendu (glow inclus)
+    if(allDone){
+      if(!titleCanvas)buildTitleCanvas()
+      // Shimmer animé (balaye de gauche à droite en boucle)
+      shimmerX+=2.5*dt/16*shimmerDir
+      if(shimmerX>textW(TITLE,TPX)+30||shimmerX<-30)shimmerDir*=-1
+      ctx.drawImage(titleCanvas,titleX,titleY)
+    } else {
+      // Pendant la chute: dessiner les lettres individuellement
+      letters.forEach(l=>{if(l.at)drawTxt(ctx,l.ch,l.x,l.y,TPX,'#ffffff','#2a2050')})
+    }
+
+    if(allDone)subtitleA=Math.min(1,subtitleA+0.018)
+    if(subtitleA>0){
+      const sub='✦  Saison 2  ✦', sw=textW(sub,2)
+      const sy=Math.round(H/2+7*TPX/2+12)
+      ctx.globalAlpha=subtitleA;drawTxt(ctx,sub,Math.round((W-sw)/2),sy,2,'#fcfc54','#3f3e00');ctx.globalAlpha=1
+    }
+
+    if(STATE==='reveal'&&allDone&&subtitleA>=1){STATE='idle';t0=now}
+    if(STATE==='idle'&&el>2000){STATE='out';t0=now}
+  }
+
+  // ── OUT ───────────────────────────────────────────────────────────────────
+  else if(STATE==='out'){
+    if(titleCanvas)ctx.drawImage(titleCanvas,titleX,titleY)
+    const sub='✦  Saison 2  ✦', sw=textW(sub,2)
+    drawTxt(ctx,sub,Math.round((W-sw)/2),Math.round(H/2+7*TPX/2+12),2,'#fcfc54','#3f3e00')
+    fadeA=Math.min(1,el/720)
+    ctx.fillStyle='#06040f';ctx.globalAlpha=fadeA;ctx.fillRect(0,0,W,H);ctx.globalAlpha=1
+    if(fadeA>=1){done=true;ipcRenderer.send('splashDone');return}
+  }
+
+  // ── Particules (toutes phases) ────────────────────────────────────────────
+  parts=parts.filter(p=>p.life>0)
+  parts.forEach(p=>{
+    p.x+=p.vx;p.y+=p.vy;p.vy+=.13;p.vx*=.982;p.life-=p.decay
+    ctx.globalAlpha=p.life*p.life;ctx.fillStyle=p.col
+    ctx.fillRect(Math.round(p.x),Math.round(p.y),p.sz,p.sz)
+  })
+  ctx.globalAlpha=1
+
+  // ── Progress bar ──────────────────────────────────────────────────────────
+  barVal+=(barTgt-barVal)*.04
+  const bw2=Math.round(W*barVal)
+  if(bw2>0)ctx.drawImage(pbc,0,0,bw2,3,0,H-3,bw2,3)
+
+  // ── Label ─────────────────────────────────────────────────────────────────
+  ctx.globalAlpha=lblA
+  drawTxt(ctx,LBLS[Math.min(lblI,LBLS.length-1)],18,H-14,2,'#3d2d6a','#1a0030')
+  ctx.globalAlpha=1
+}
+
+// ── Init après vrai premier paint ────────────────────────────────────────────
+requestAnimationFrame(()=>requestAnimationFrame(()=>{
+  // Préchauffage du cache glyphes
+  'BranlyCraft✦ Saison 2BOOM!Chargement'.split('').forEach(ch=>{
+    glyph(ch,5,'#ffffff','#2a2050'); glyph(ch,2,'#fcfc54','#3f3e00')
+    glyph(ch,5,'#FFD700','#8b0000'); glyph(ch,2,'#3d2d6a','#1a0030')
+  })
+  lastT=performance.now(); t0=lastT
+  requestAnimationFrame(loop)
+  setTimeout(playSound,400)
+}))
+</script>
+</body>
+</html>

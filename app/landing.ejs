@@ -46,10 +46,17 @@
     <!-- ═══ ZONE PRINCIPALE ═══ -->
     <main class="bc-main">
 
+        <!-- Bannière mise à jour (cachée par défaut) -->
+        <div id="bc-update-banner" style="display:none;">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+            <span id="bc-update-banner-text">Nouvelle version disponible</span>
+            <button id="bc-update-banner-btn">Mettre à jour</button>
+        </div>
+
         <!-- Badge + Titre + Actions (overlay bas gauche) -->
         <div class="bc-hero-overlay">
 
-            <h1 class="bc-big-title">TEST</h1>
+            <h1 class="bc-big-title">BranLyCraft</h1>
 
             <p class="bc-subtitle">
                 Le serveur Minecraft des lycéens, avec 500 mods soigneusement sélectionnés.<br>

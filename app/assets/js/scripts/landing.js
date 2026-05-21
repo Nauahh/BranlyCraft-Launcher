@@ -149,7 +149,9 @@ function updateSelectedAccount(authUser){
             username = authUser.displayName
         }
         if(authUser.uuid != null){
-            document.getElementById('avatarContainer').style.backgroundImage = `url('https://mc-heads.net/body/${authUser.uuid}/right')`
+            document.getElementById('avatarContainer').style.backgroundImage = `url('https://mc-heads.net/head/${authUser.uuid}')`
+            const mini = document.getElementById('userHeadMini')
+            if(mini) mini.style.backgroundImage = `url('https://mc-heads.net/head/${authUser.uuid}')`
         }
     }
     user_text.innerHTML = username
@@ -241,18 +243,55 @@ const refreshServerStatus = async (fade = false) => {
 
     let pLabel = Lang.queryJS('landing.serverStatus.server')
     let pVal = Lang.queryJS('landing.serverStatus.offline')
+    let isOnline = false
 
+    let playerSample = []
     try {
 
-        const servStat = await getServerStatus(47, serv.hostname, serv.port)
+        const servStat = await getServerStatus(767, serv.hostname, serv.port)
         console.log(servStat)
         pLabel = Lang.queryJS('landing.serverStatus.players')
         pVal = servStat.players.online + '/' + servStat.players.max
+        isOnline = true
+        playerSample = servStat.players?.sample || []
 
     } catch (err) {
         loggerLanding.warn('Unable to refresh server status, assuming offline.')
         loggerLanding.debug(err)
     }
+
+    const badge = document.getElementById('server_status_badge')
+    const playerCount = document.getElementById('player_count')
+    const playerLabel = document.getElementById('landingPlayerLabel')
+
+    if(badge) {
+        badge.textContent = isOnline ? 'EN LIGNE' : 'HORS LIGNE'
+        badge.className = 'bc-status-badge ' + (isOnline ? 'bc-status-online' : 'bc-status-offline')
+    }
+    if(playerCount) playerCount.style.display = isOnline ? '' : 'none'
+    if(playerLabel) playerLabel.style.display = isOnline ? '' : 'none'
+
+    // Player avatars
+    const avatarsContainer = document.getElementById('bc-online-avatars')
+    if(avatarsContainer) {
+        avatarsContainer.innerHTML = ''
+        const shown = playerSample.slice(0, 10)
+        if(isOnline && shown.length > 0) {
+            shown.forEach(player => {
+                const img = document.createElement('img')
+                img.className = 'bc-player-head'
+                img.src = `https://mc-heads.net/head/${player.id}`
+                img.title = player.name
+                img.alt = player.name
+                img.onerror = () => { img.style.display = 'none' }
+                avatarsContainer.appendChild(img)
+            })
+            avatarsContainer.style.display = 'flex'
+        } else {
+            avatarsContainer.style.display = 'none'
+        }
+    }
+
     if(fade){
         $('#server_status_wrapper').fadeOut(250, () => {
             document.getElementById('landingPlayerLabel').innerHTML = pLabel
@@ -263,16 +302,116 @@ const refreshServerStatus = async (fade = false) => {
         document.getElementById('landingPlayerLabel').innerHTML = pLabel
         document.getElementById('player_count').innerHTML = pVal
     }
-    
+
 }
 
 refreshMojangStatuses()
 // Server Status is refreshed in uibinder.js on distributionIndexDone.
 
+// Init Discord RPC dès l'ouverture du launcher
+;(async function initLauncherRPC() {
+    try {
+        const distro = await DistroAPI.getDistribution()
+        // Fallback sur le premier serveur si aucun n'est sélectionné encore
+        const serv = distro.getServerById(ConfigManager.getSelectedServer()) || distro.servers[0]
+        if(distro.rawDistribution.discord != null && serv?.rawServer?.discord != null) {
+            DiscordWrapper.initRPC(distro.rawDistribution.discord, serv.rawServer.discord, Lang.queryJS('landing.discord.idle'))
+            hasRPC = true
+        }
+    } catch(e) {
+        loggerLanding.warn('Discord RPC init failed:', e)
+    }
+})()
+
+// Membres Discord en ligne via Widget API (https node module pour éviter CORS)
+const https = require('https')
+
+function fetchDiscordWidget(guildId) {
+    return new Promise((resolve, reject) => {
+        const req = https.get(
+            `https://discord.com/api/guilds/${guildId}/widget.json`,
+            { headers: { 'User-Agent': 'BranlyCraft-Launcher/1.0' } },
+            (res) => {
+                let body = ''
+                res.on('data', chunk => body += chunk)
+                res.on('end', () => {
+                    try { resolve(JSON.parse(body)) }
+                    catch(e) { reject(e) }
+                })
+            }
+        )
+        req.on('error', reject)
+        req.setTimeout(5000, () => { req.destroy(); reject(new Error('timeout')) })
+    })
+}
+
+const STATUS_COLOR = { online: '#23a55a', idle: '#f0b232', dnd: '#f23f43', offline: '#80848e' }
+
+const refreshDiscordMembers = async () => {
+    try {
+        const distro = await DistroAPI.getDistribution()
+        const guildId = distro.rawDistribution.discord?.guildId
+        if(!guildId || guildId === 'VOTRE_GUILD_ID_DISCORD') return
+
+        const data = await fetchDiscordWidget(guildId)
+
+        if(data.code) {
+            loggerLanding.warn('Discord widget désactivé ou inaccessible:', data.message)
+            return
+        }
+
+        const panel   = document.getElementById('bc-discord-panel')
+        const countEl = document.getElementById('bc-discord-count')
+        const listEl  = document.getElementById('bc-discord-members')
+        if(!panel || !countEl || !listEl) return
+
+        // Filtrer les bots : flag bot + liste d'exclusion + heuristique nom
+        const exclusions = distro.rawDistribution.discord?.botExclusions || []
+        const allMembers = data.members || []
+        const players = allMembers.filter(m =>
+            !m.bot &&
+            !/bot/i.test(m.username) &&
+            !exclusions.includes(m.username)
+        )
+
+        // Trier : ceux qui ont une activité en premier
+        players.sort((a, b) => (b.game ? 1 : 0) - (a.game ? 1 : 0))
+
+        countEl.textContent = players.length
+
+        listEl.innerHTML = ''
+        players.forEach(member => {
+            const statusColor = STATUS_COLOR[member.status] || STATUS_COLOR.offline
+            const activity = member.game?.name || null
+
+            const div = document.createElement('div')
+            div.className = 'bc-discord-member'
+
+            div.innerHTML = `
+                <div class="bc-discord-status-dot" style="background:${statusColor};box-shadow:0 0 6px ${statusColor};"></div>
+                <img class="bc-discord-avatar" src="${member.avatar_url}" alt="${member.username}"/>
+                <div class="bc-discord-info">
+                    <span class="bc-discord-name">${member.username}</span>
+                    ${activity ? `<span class="bc-discord-activity">${activity}</span>` : ''}
+                </div>
+            `
+            div.querySelector('.bc-discord-avatar').onerror = function(){ this.src = 'assets/images/SealCircle.png' }
+            listEl.appendChild(div)
+        })
+
+        panel.style.display = players.length > 0 ? 'block' : 'none'
+    } catch(e) {
+        loggerLanding.warn('Discord widget fetch failed:', e)
+    }
+}
+
+refreshDiscordMembers()
+setInterval(refreshDiscordMembers, 60000)
+
 // Refresh statuses every hour. The status page itself refreshes every day so...
 let mojangStatusListener = setInterval(() => refreshMojangStatuses(true), 60*60*1000)
-// Set refresh rate to once every 5 minutes.
-let serverStatusListener = setInterval(() => refreshServerStatus(true), 300000)
+// Set refresh rate to once every 15 seconds.
+let serverStatusListener = setInterval(() => refreshServerStatus(true), 15000)
 
 /**
  * Shows an error overlay, toggles off the launch area.
@@ -552,6 +691,20 @@ async function dlAsync(login = true) {
     const versionData = await mojangIndexProcessor.getVersionJson()
 
     if(login) {
+        // Rafraîchit le token Microsoft/MC si besoin avant de lancer le jeu
+        try {
+            const tokenValid = await AuthManager.validateSelected()
+            if(!tokenValid) {
+                toggleLaunchArea(false)
+                loggerLaunchSuite.warn('Token invalide avant le lancement, redirection vers la connexion.')
+                await validateSelectedAccount()
+                return
+            }
+        } catch(err) {
+            loggerLaunchSuite.warn('Erreur lors du rafraîchissement du token avant le lancement :', err)
+            // On continue quand même, Minecraft gérera l'erreur si besoin
+        }
+
         const authUser = ConfigManager.getSelectedAccount()
         loggerLaunchSuite.info(`Sending selected account (${authUser.displayName}) to ProcessBuilder.`)
         let pb = new ProcessBuilder(serv, versionData, modLoaderData, authUser, remote.app.getVersion())
@@ -560,8 +713,25 @@ async function dlAsync(login = true) {
         // const SERVER_JOINED_REGEX = /\[.+\]: \[CHAT\] [a-zA-Z0-9_]{1,16} joined the game/
         const SERVER_JOINED_REGEX = new RegExp(`\\[.+\\]: \\[CHAT\\] ${authUser.displayName} joined the game`)
 
+        const launchBtn = document.getElementById('launch_button')
+        const launchBtnOriginalHTML = launchBtn ? launchBtn.innerHTML : ''
+
+        const setGameRunningState = (running) => {
+            if(!launchBtn) return
+            if(running) {
+                launchBtn.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="white"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg> En jeu`
+                launchBtn.disabled = true
+                launchBtn.classList.add('bc-btn-ingame')
+            } else {
+                launchBtn.innerHTML = launchBtnOriginalHTML
+                launchBtn.disabled = false
+                launchBtn.classList.remove('bc-btn-ingame')
+            }
+        }
+
         const onLoadComplete = () => {
             toggleLaunchArea(false)
+            setGameRunningState(true)
             if(hasRPC){
                 DiscordWrapper.updateDetails(Lang.queryJS('landing.discord.loading'))
                 proc.stdout.on('data', gameStateChange)
@@ -605,7 +775,26 @@ async function dlAsync(login = true) {
         }
 
         try {
+            // ── Forcer le resource pack BranlyCraft-Title en 1ère position ──
+            try {
+                const fs = require('fs')
+                const optPath = require('path').join(
+                    ConfigManager.getInstanceDirectory(),
+                    serv.rawServer.id,
+                    'options.txt'
+                )
+                if (fs.existsSync(optPath)) {
+                    let opts = fs.readFileSync(optPath, 'utf8')
+                    const m = opts.match(/^resourcePacks:\[(.*)\]$/m)
+                    const current = m ? m[1].split(',').map(s => s.trim()).filter(s => s.length > 0 && !s.includes('BranlyCraft-Title')) : []
+                    const newLine = `resourcePacks:["file/BranlyCraft-Title",${current.join(',')}]`
+                    opts = m ? opts.replace(/^resourcePacks:\[.*\]$/m, newLine) : opts + `\n${newLine}\n`
+                    fs.writeFileSync(optPath, opts, 'utf8')
+                }
+            } catch(e) { /* silencieux */ }
+
             // Build Minecraft process.
+            const gameStartTime = Date.now()
             proc = pb.build()
 
             // Bind listeners to stdout.
@@ -616,15 +805,24 @@ async function dlAsync(login = true) {
 
             // Init Discord Hook
             if(distro.rawDistribution.discord != null && serv.rawServer.discord != null){
-                DiscordWrapper.initRPC(distro.rawDistribution.discord, serv.rawServer.discord)
-                hasRPC = true
-                proc.on('close', (code, signal) => {
-                    loggerLaunchSuite.info('Shutting down Discord Rich Presence..')
-                    DiscordWrapper.shutdownRPC()
-                    hasRPC = false
-                    proc = null
-                })
+                if(!hasRPC) {
+                    DiscordWrapper.initRPC(distro.rawDistribution.discord, serv.rawServer.discord)
+                    hasRPC = true
+                }
             }
+
+            // Toujours actif : restauration bouton + temps de jeu + Discord idle
+            proc.on('close', (code, signal) => {
+                loggerLaunchSuite.info('Jeu fermé.')
+                ConfigManager.addPlaytime(Date.now() - gameStartTime)
+                ConfigManager.save()
+                updatePlaytimeDisplay()
+                setGameRunningState(false)
+                if(hasRPC) {
+                    DiscordWrapper.updateDetails(Lang.queryJS('landing.discord.idle'))
+                }
+                proc = null
+            })
 
         } catch(err) {
 
@@ -635,6 +833,114 @@ async function dlAsync(login = true) {
     }
 
 }
+
+// Temps de jeu
+function formatPlaytime(ms) {
+    const totalMins = Math.floor(ms / 60000)
+    const hours = Math.floor(totalMins / 60)
+    const mins = totalMins % 60
+    if(hours > 0) return `${hours}h ${mins > 0 ? mins + 'min' : ''} jouées`.trim()
+    if(mins > 0) return `${mins} min jouées`
+    return ''
+}
+
+function updatePlaytimeDisplay() {
+    const el = document.getElementById('user_playtime')
+    if(!el) return
+    el.textContent = formatPlaytime(ConfigManager.getTotalPlaytime())
+}
+
+updatePlaytimeDisplay()
+
+// Fond d'écran personnalisé
+;(function() {
+    function updateActiveThumbs(id) {
+        document.querySelectorAll('.bc-bg-thumb').forEach(btn => {
+            if(btn.dataset.bg === 'random') {
+                btn.classList.toggle('bc-bg-thumb-active', id === null)
+            } else {
+                btn.classList.toggle('bc-bg-thumb-active', parseInt(btn.dataset.bg) === id)
+            }
+        })
+    }
+
+    function applyBackground(id) {
+        // null = aléatoire : on ne change pas le fond actuel (déjà choisi au démarrage)
+        if(id !== null) {
+            document.body.style.backgroundImage = `url('assets/images/backgrounds/${id}.jpg')`
+        }
+        updateActiveThumbs(id)
+    }
+
+    const savedBg = ConfigManager.getBackground()
+    // Marquer le bon bouton actif au chargement (sans rechanger le fond)
+    updateActiveThumbs(savedBg)
+
+    document.querySelectorAll('.bc-bg-thumb').forEach(btn => {
+        btn.onclick = () => {
+            if(btn.dataset.bg === 'random') {
+                ConfigManager.setBackground(null)
+                ConfigManager.save()
+                updateActiveThumbs(null)
+                // Le fond actuel reste, le prochain démarrage sera aléatoire
+            } else {
+                const id = parseInt(btn.dataset.bg)
+                ConfigManager.setBackground(id)
+                ConfigManager.save()
+                applyBackground(id)
+            }
+        }
+    })
+})()
+
+// Screenshots shortcut
+;(function() {
+    const btn = document.getElementById('screenshotsBtn')
+    if(!btn) return
+    btn.onclick = async () => {
+        const path = require('path')
+        const fs = require('fs-extra')
+        const { shell } = require('electron')
+        const screenshotsPath = path.join(ConfigManager.getInstanceDirectory(), 'atm10-main', 'screenshots')
+        await fs.ensureDir(screenshotsPath)
+        shell.openPath(screenshotsPath)
+    }
+})()
+
+// Accent color theme
+;(function() {
+    const ACCENT_COLORS = {
+        teal:   { main: '#14b8a6', dk: '#0d9488', glow: 'rgba(20,184,166,.60)',  border: 'rgba(20,184,166,0.18)' },
+        violet: { main: '#8b5cf6', dk: '#7c3aed', glow: 'rgba(139,92,246,.60)',  border: 'rgba(139,92,246,0.18)' },
+        orange: { main: '#f97316', dk: '#ea580c', glow: 'rgba(249,115,22,.60)',  border: 'rgba(249,115,22,0.18)' },
+        red:    { main: '#ef4444', dk: '#dc2626', glow: 'rgba(239,68,68,.60)',   border: 'rgba(239,68,68,0.18)'  },
+        blue:   { main: '#3b82f6', dk: '#2563eb', glow: 'rgba(59,130,246,.60)',  border: 'rgba(59,130,246,0.18)' },
+        pink:   { main: '#ec4899', dk: '#db2777', glow: 'rgba(236,72,153,.60)',  border: 'rgba(236,72,153,0.18)' },
+    }
+
+    window.applyAccentColor = function(colorName) {
+        const c = ACCENT_COLORS[colorName] || ACCENT_COLORS.teal
+        const root = document.documentElement
+        root.style.setProperty('--teal', c.main)
+        root.style.setProperty('--teal-dk', c.dk)
+        root.style.setProperty('--teal-glow', `0 0 18px ${c.glow}`)
+        root.style.setProperty('--border', c.border)
+        document.querySelectorAll('.bc-accent-dot').forEach(btn => {
+            btn.classList.toggle('bc-accent-dot-active', btn.dataset.color === colorName)
+        })
+    }
+
+    applyAccentColor(ConfigManager.getAccentColor())
+
+    document.querySelectorAll('.bc-accent-dot').forEach(btn => {
+        btn.onclick = () => {
+            const color = btn.dataset.color
+            ConfigManager.setAccentColor(color)
+            ConfigManager.save()
+            applyAccentColor(color)
+        }
+    })
+})()
 
 /**
  * News Loading Functions

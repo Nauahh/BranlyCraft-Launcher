@@ -126,45 +126,72 @@
                 <div class="settingsSelServContent">
 
                 </div>
-                <div class="settingsSwitchServerContainer">
+                <div class="settingsSwitchServerContainer" style="display:none;">
                     <div class="settingsSwitchServerContent">
                         <button class="settingsSwitchServerButton"><%- lang('settings.switchServerButton') %></button>
                     </div>
                 </div>
             </div>
-            <div id="settingsModsContainer">
-                <div id="settingsReqModsContainer">
-                    <div class="settingsModsHeader"><%- lang('settings.requiredMods') %></div>
-                    <div id="settingsReqModsContent">
+            <!-- Barre de recherche mods -->
+            <div id="modSearchWrapper">
+                <div id="modSearchBar">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" id="modSearchIcon"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+                    <input type="text" id="modSearchInput" placeholder="Rechercher un mod..." autocomplete="off" spellcheck="false"/>
+                    <button id="modSearchClear" style="display:none;">✕</button>
+                </div>
+                <span id="modSearchCount"></span>
+            </div>
 
+            <div id="settingsModsContainer">
+
+                <div id="settingsReqModsContainer">
+                    <div class="settingsModsHeader">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                        <span><%- lang('settings.requiredMods') %></span>
+                        <span class="bc-mod-count" id="bcReqModCount"></span>
                     </div>
+                    <div id="settingsReqModsContent"></div>
                 </div>
+
                 <div id="settingsOptModsContainer">
-                    <div class="settingsModsHeader"><%- lang('settings.optionalMods') %></div>
-                    <div id="settingsOptModsContent">
-                        
+                    <div class="settingsModsHeader">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10zm-1-7v2h2v-2h-2zm0-8v6h2V7h-2z"/></svg>
+                        <span><%- lang('settings.optionalMods') %></span>
+                        <span class="bc-mod-count" id="bcOptModCount"></span>
                     </div>
+                    <div id="settingsOptModsContent"></div>
                 </div>
+
                 <div id="settingsDropinModsContainer">
-                    <div class="settingsModsHeader"><%- lang('settings.dropinMods') %></div>
-                    <button id="settingsDropinFileSystemButton"><%- lang('settings.addMods') %> <span id="settingsDropinRefreshNote"><%- lang('settings.dropinRefreshNote') %></span></button>
-                    <div id="settingsDropinModsContent">
-                        
+                    <div class="settingsModsHeader">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M20 6h-2.18c.07-.44.18-.87.18-1a3 3 0 0 0-6 0c0 .13.11.56.18 1H10c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6-1c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm1 14h-2v-3H9l4-4 4 4h-2v3z"/></svg>
+                        <span><%- lang('settings.dropinMods') %></span>
                     </div>
+                    <button id="settingsDropinFileSystemButton">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" style="margin-right:6px;vertical-align:middle;"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
+                        <%- lang('settings.addMods') %>
+                        <span id="settingsDropinRefreshNote"><%- lang('settings.dropinRefreshNote') %></span>
+                    </button>
+                    <div id="settingsDropinModsContent"></div>
                 </div>
+
                 <div id="settingsShadersContainer">
-                    <div class="settingsModsHeader"><%- lang('settings.shaderpacks') %></div>
+                    <div class="settingsModsHeader">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9-4.03-9-9-9zm0 16c-3.86 0-7-3.14-7-7s3.14-7 7-7 7 3.14 7 7-3.14 7-7 7zm-1.5-4l-2.5-3 2-2.5L12 12l1.5-1.5L16 14l-2.5 3-1.5-2-1.5 2z"/></svg>
+                        <span><%- lang('settings.shaderpacks') %></span>
+                    </div>
                     <div id="settingsShaderpackDesc"><%- lang('settings.shaderpackDesc') %></div>
                     <div id="settingsShaderpackWrapper">
-                        <button id="settingsShaderpackButton"> + </button>
+                        <button id="settingsShaderpackButton">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                        </button>
                         <div class="settingsSelectContainer">
                             <div class="settingsSelectSelected" id="settingsShadersSelected"><%- lang('settings.selectShaderpack') %></div>
-                            <div class="settingsSelectOptions" id="settingsShadersOptions" hidden>
-
-                            </div>
+                            <div class="settingsSelectOptions" id="settingsShadersOptions" hidden></div>
                         </div>
                     </div>
                 </div>
+
             </div>
         </div>
         <div id="settingsTabJava" class="settingsTab" style="display: none;">
@@ -176,7 +203,7 @@
                 <div class="settingsSelServContent">
 
                 </div>
-                <div class="settingsSwitchServerContainer">
+                <div class="settingsSwitchServerContainer" style="display:none;">
                     <div class="settingsSwitchServerContent">
                         <button class="settingsSwitchServerButton"><%- lang('settings.switchServerButton') %></button>
                     </div>
@@ -276,6 +303,56 @@
             </div>
             <div class="settingsFieldContainer">
                 <div class="settingsFieldLeft">
+                    <span class="settingsFieldTitle">Thème de couleur</span>
+                    <span class="settingsFieldDesc">Couleur d'accent du launcher.</span>
+                </div>
+                <div class="settingsFieldRight">
+                    <div class="bc-accent-presets bc-accent-presets-settings">
+                        <button class="bc-accent-dot" data-color="teal"   style="background:#14b8a6" title="Teal"></button>
+                        <button class="bc-accent-dot" data-color="violet" style="background:#8b5cf6" title="Violet"></button>
+                        <button class="bc-accent-dot" data-color="orange" style="background:#f97316" title="Orange"></button>
+                        <button class="bc-accent-dot" data-color="red"    style="background:#ef4444" title="Rouge"></button>
+                        <button class="bc-accent-dot" data-color="blue"   style="background:#3b82f6" title="Bleu"></button>
+                        <button class="bc-accent-dot" data-color="pink"   style="background:#ec4899" title="Rose"></button>
+                    </div>
+                </div>
+            </div>
+            <div class="settingsFieldContainer bc-bg-field">
+                <div class="settingsFieldLeft" style="flex:1;">
+                    <span class="settingsFieldTitle">Fond d'écran</span>
+                    <span class="settingsFieldDesc">Choisissez votre fond d'écran personnel.</span>
+                    <div class="bc-bg-picker" id="bc-bg-picker">
+                        <button class="bc-bg-thumb bc-bg-random" data-bg="random">
+                            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+                            <span>Aléatoire</span>
+                        </button>
+                        <button class="bc-bg-thumb" data-bg="0"><img src="assets/images/backgrounds/0.jpg"/></button>
+                        <button class="bc-bg-thumb" data-bg="1"><img src="assets/images/backgrounds/1.jpg"/></button>
+                        <button class="bc-bg-thumb" data-bg="2"><img src="assets/images/backgrounds/2.jpg"/></button>
+                        <button class="bc-bg-thumb" data-bg="3"><img src="assets/images/backgrounds/3.jpg"/></button>
+                        <button class="bc-bg-thumb" data-bg="4"><img src="assets/images/backgrounds/4.jpg"/></button>
+                        <button class="bc-bg-thumb" data-bg="5"><img src="assets/images/backgrounds/5.jpg"/></button>
+                        <button class="bc-bg-thumb" data-bg="6"><img src="assets/images/backgrounds/6.jpg"/></button>
+                        <button class="bc-bg-thumb" data-bg="7"><img src="assets/images/backgrounds/7.jpg"/></button>
+                        <button class="bc-bg-thumb" data-bg="8"><img src="assets/images/backgrounds/8.jpg"/></button>
+                        <button class="bc-bg-thumb" data-bg="9"><img src="assets/images/backgrounds/9.jpg"/></button>
+                        <button class="bc-bg-thumb" data-bg="10"><img src="assets/images/backgrounds/10.jpg"/></button>
+                        <button class="bc-bg-thumb" data-bg="11"><img src="assets/images/backgrounds/11.jpg"/></button>
+                        <button class="bc-bg-thumb" data-bg="12"><img src="assets/images/backgrounds/12.jpg"/></button>
+                        <button class="bc-bg-thumb" data-bg="13"><img src="assets/images/backgrounds/13.jpg"/></button>
+                        <button class="bc-bg-thumb" data-bg="14"><img src="assets/images/backgrounds/14.jpg"/></button>
+                        <button class="bc-bg-thumb" data-bg="15"><img src="assets/images/backgrounds/15.jpg"/></button>
+                        <button class="bc-bg-thumb" data-bg="16"><img src="assets/images/backgrounds/16.jpg"/></button>
+                        <button class="bc-bg-thumb" data-bg="17"><img src="assets/images/backgrounds/17.jpg"/></button>
+                        <button class="bc-bg-thumb" data-bg="18"><img src="assets/images/backgrounds/18.jpg"/></button>
+                        <button class="bc-bg-thumb" data-bg="19"><img src="assets/images/backgrounds/19.jpg"/></button>
+                        <button class="bc-bg-thumb" data-bg="20"><img src="assets/images/backgrounds/20.jpg"/></button>
+                        <button class="bc-bg-thumb" data-bg="21"><img src="assets/images/backgrounds/21.jpg"/></button>
+                    </div>
+                </div>
+            </div>
+            <div class="settingsFieldContainer">
+                <div class="settingsFieldLeft">
                     <span class="settingsFieldTitle"><%- lang('settings.allowPrereleaseTitle') %></span>
                     <span class="settingsFieldDesc"><%- lang('settings.allowPrereleaseDesc') %></span>
                 </div>
@@ -328,27 +405,6 @@
                         </div>
                     </div>
                 </div>
-                <div id="settingsAboutButtons">
-                    <a href="<%- lang('settings.sourceGithubLink') %>" id="settingsAboutSourceButton" class="settingsAboutButton"><%- lang('settings.sourceGithub') %></a>
-                    <!-- The following must be included in third-party usage. -->
-                    <!-- <a href="https://github.com/dscalzi/HeliosLauncher" id="settingsAboutSourceButton" class="settingsAboutButton">Original Source</a> -->
-                    <a href="<%- lang('settings.supportLink') %>" id="settingsAboutSupportButton" class="settingsAboutButton"><%- lang('settings.support') %></a>
-                    <a href="#" id="settingsAboutDevToolsButton" class="settingsAboutButton"><%- lang('settings.devToolsConsole') %></a>
-                </div>
-            </div>
-            <div class="settingsChangelogContainer">
-                <div class="settingsChangelogContent">
-                    <div class="settingsChangelogHeadline">
-                        <div class="settingsChangelogLabel"><%- lang('settings.releaseNotes') %></div>
-                        <div class="settingsChangelogTitle"><%- lang('settings.changelog') %></div>
-                    </div>
-                    <div class="settingsChangelogText">
-                        <%- lang('settings.noReleaseNotes') %>
-                    </div>
-                </div>
-                <div class="settingsChangelogActions">
-                    <a class="settingsChangelogButton settingsAboutButton" href="#"><%- lang('settings.viewReleaseNotes') %></a>
-                </div>
             </div>
         </div>
         <div id="settingsTabUpdate" class="settingsTab" style="display: none;">
@@ -374,16 +430,12 @@
                     <div id="settingsUpdateActionContainer">
                         <button id="settingsUpdateActionButton"><%- lang('settings.checkForUpdates') %></button>
                     </div>
-                </div>
-            </div>
-            <div class="settingsChangelogContainer">
-                <div class="settingsChangelogContent">
-                    <div class="settingsChangelogHeadline">
-                        <div class="settingsChangelogLabel"><%- lang('settings.whatsNew') %></div>
-                        <div class="settingsChangelogTitle"><%- lang('settings.updateReleaseNotes') %></div>
-                    </div>
-                    <div class="settingsChangelogText">
-                        <%- lang('settings.noReleaseNotes') %>
+                    <!-- Barre de progression téléchargement -->
+                    <div id="settingsUpdateProgressContainer" style="display:none; margin-top:10px;">
+                        <div id="settingsUpdateProgressBar">
+                            <div id="settingsUpdateProgressFill"></div>
+                        </div>
+                        <span id="settingsUpdateProgressText">0%</span>
                     </div>
                 </div>
             </div>

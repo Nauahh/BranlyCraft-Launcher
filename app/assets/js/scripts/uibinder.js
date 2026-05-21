@@ -65,35 +65,33 @@ async function showMainUI(data){
     }
 
     await prepareSettings(true)
-    updateSelectedServer(data.getServerById(ConfigManager.getSelectedServer()))
+    // Auto-select the first server (launcher is single-server only)
+    const selectedServer = data.getServerById(ConfigManager.getSelectedServer()) || data.servers[0]
+    updateSelectedServer(selectedServer)
     refreshServerStatus()
     setTimeout(() => {
         document.getElementById('frameBar').style.backgroundColor = 'rgba(0, 0, 0, 0.5)'
-        document.body.style.backgroundImage = `url('assets/images/backgrounds/${document.body.getAttribute('bkid')}.jpg')`
+        const savedBg = ConfigManager.getBackground()
+        const bgId = savedBg !== null ? savedBg : document.body.getAttribute('bkid')
+        document.body.style.backgroundImage = `url('assets/images/backgrounds/${bgId}.jpg')`
         $('#main').show()
 
         const isLoggedIn = Object.keys(ConfigManager.getAuthAccounts()).length > 0
 
-        // If this is enabled in a development environment we'll get ratelimited.
-        // The relaunch frequency is usually far too high.
-        if(!isDev && isLoggedIn){
+        // Validation du token au démarrage (y compris en dev pour garder la session active)
+        if(isLoggedIn){
             validateSelectedAccount()
         }
 
-        if(ConfigManager.isFirstLaunch()){
-            currentView = VIEWS.welcome
-            $(VIEWS.welcome).fadeIn(1000)
+        if(isLoggedIn){
+            currentView = VIEWS.landing
+            $(VIEWS.landing).fadeIn(1000)
         } else {
-            if(isLoggedIn){
-                currentView = VIEWS.landing
-                $(VIEWS.landing).fadeIn(1000)
-            } else {
-                loginOptionsCancelEnabled(false)
-                loginOptionsViewOnLoginSuccess = VIEWS.landing
-                loginOptionsViewOnLoginCancel = VIEWS.loginOptions
-                currentView = VIEWS.loginOptions
-                $(VIEWS.loginOptions).fadeIn(1000)
-            }
+            loginOptionsCancelEnabled(false)
+            loginOptionsViewOnLoginSuccess = VIEWS.landing
+            loginOptionsViewOnLoginCancel = VIEWS.loginOptions
+            currentView = VIEWS.loginOptions
+            $(VIEWS.loginOptions).fadeIn(1000)
         }
 
         setTimeout(() => {
@@ -133,7 +131,8 @@ function showFatalStartupError(){
  * @param {Object} data The distro index object.
  */
 function onDistroRefresh(data){
-    updateSelectedServer(data.getServerById(ConfigManager.getSelectedServer()))
+    const selectedServer = data.getServerById(ConfigManager.getSelectedServer()) || data.servers[0]
+    updateSelectedServer(selectedServer)
     refreshServerStatus()
     initNews()
     syncModConfigurations(data)

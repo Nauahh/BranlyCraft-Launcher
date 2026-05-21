@@ -46,22 +46,32 @@ if(!isDev){
                 break
             case 'update-available':
                 loggerAutoUpdater.info('New update available', info.version)
-                
-                if(process.platform === 'darwin'){
-                    info.darwindownload = `https://github.com/dscalzi/HeliosLauncher/releases/download/v${info.version}/Helios-Launcher-setup-${info.version}${process.arch === 'arm64' ? '-arm64' : '-x64'}.dmg`
-                    showUpdateUI(info)
-                }
-                
+                showUpdateUI(info)
                 populateSettingsUpdateInformation(info)
+                break
+            case 'download-progress':
+                // info = { percent, transferred, total, bytesPerSecond }
+                if(info != null){
+                    const pct = Math.floor(info.percent || 0)
+                    settingsUpdateButtonStatus(`Téléchargement… ${pct}%`, true)
+                    const progressCont = document.getElementById('settingsUpdateProgressContainer')
+                    const progressFill = document.getElementById('settingsUpdateProgressFill')
+                    const progressText = document.getElementById('settingsUpdateProgressText')
+                    if(progressCont) progressCont.style.display = 'flex'
+                    if(progressFill){
+                        progressFill.classList.remove('indeterminate')
+                        progressFill.style.width = pct + '%'
+                    }
+                    if(progressText) progressText.textContent = pct + '%'
+                }
                 break
             case 'update-downloaded':
                 loggerAutoUpdater.info('Update ' + info.version + ' ready to be installed.')
-                settingsUpdateButtonStatus(Lang.queryJS('uicore.autoUpdate.installNowButton'), false, () => {
-                    if(!isDev){
-                        ipcRenderer.send('autoUpdateAction', 'installUpdateNow')
-                    }
-                })
-                showUpdateUI(info)
+                settingsUpdateButtonStatus('Installation…', true)
+                // Installation automatique sans action de l'utilisateur
+                if(!isDev){
+                    ipcRenderer.send('autoUpdateAction', 'installUpdateNow')
+                }
                 break
             case 'update-not-available':
                 loggerAutoUpdater.info('No new update found.')
@@ -84,6 +94,7 @@ if(!isDev){
                         loggerAutoUpdater.debug('Error Code:', info.code)
                     }
                 }
+                settingsUpdateButtonStatus(Lang.queryJS('uicore.autoUpdate.checkForUpdatesButton'))
                 break
             default:
                 loggerAutoUpdater.info('Unknown argument', arg)
@@ -105,26 +116,29 @@ function changeAllowPrerelease(val){
 }
 
 function showUpdateUI(info){
-    //TODO Make this message a bit more informative `${info.version}`
-    document.getElementById('image_seal_container').setAttribute('update', true)
-    document.getElementById('image_seal_container').onclick = () => {
-        /*setOverlayContent('Update Available', 'A new update for the launcher is available. Would you like to install now?', 'Install', 'Later')
-        setOverlayHandler(() => {
-            if(!isDev){
-                ipcRenderer.send('autoUpdateAction', 'installUpdateNow')
-            } else {
-                console.error('Cannot install updates in development environment.')
-                toggleOverlay(false)
-            }
-        })
-        setDismissHandler(() => {
-            toggleOverlay(false)
-        })
-        toggleOverlay(true, true)*/
-        switchView(getCurrentView(), VIEWS.settings, 500, 500, () => {
-            settingsNavItemListener(document.getElementById('settingsNavUpdate'), false)
-        })
+    // Badge sur l'icône serveur (sidebar)
+    const sealContainer = document.getElementById('image_seal_container')
+    if(sealContainer){
+        sealContainer.setAttribute('update', true)
+        sealContainer.onclick = () => goToUpdateSettings()
     }
+
+    // Bannière de notification en haut de l'accueil
+    const banner = document.getElementById('bc-update-banner')
+    if(banner){
+        const txt = document.getElementById('bc-update-banner-text')
+        if(txt && info && info.version) txt.textContent = `Mise à jour v${info.version} disponible`
+        banner.style.display = 'flex'
+        const btn = document.getElementById('bc-update-banner-btn')
+        if(btn) btn.onclick = () => goToUpdateSettings()
+    }
+}
+
+async function goToUpdateSettings(){
+    await prepareSettings()
+    switchView(getCurrentView(), VIEWS.settings, 500, 500, () => {
+        settingsNavItemListener(document.getElementById('settingsNavUpdate'), false)
+    })
 }
 
 /* jQuery Example

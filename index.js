@@ -30,9 +30,8 @@ function initAutoUpdater(event, data) {
         autoUpdater.autoInstallOnAppQuit = false
         autoUpdater.updateConfigPath = path.join(__dirname, 'dev-app-update.yml')
     }
-    if(process.platform === 'darwin'){
-        autoUpdater.autoDownload = false
-    }
+    // Ne jamais télécharger automatiquement — l'utilisateur choisit quand installer
+    autoUpdater.autoDownload = false
     autoUpdater.on('update-available', (info) => {
         event.sender.send('autoUpdateNotification', 'update-available', info)
     })
@@ -45,9 +44,12 @@ function initAutoUpdater(event, data) {
     autoUpdater.on('checking-for-update', () => {
         event.sender.send('autoUpdateNotification', 'checking-for-update')
     })
+    autoUpdater.on('download-progress', (progressObj) => {
+        event.sender.send('autoUpdateNotification', 'download-progress', progressObj)
+    })
     autoUpdater.on('error', (err) => {
         event.sender.send('autoUpdateNotification', 'realerror', err)
-    }) 
+    })
 }
 
 // Open channel to listen for update actions.
@@ -75,6 +77,12 @@ ipcMain.on('autoUpdateAction', (event, arg, data) => {
             } else {
                 autoUpdater.allowPrerelease = data
             }
+            break
+        case 'downloadUpdate':
+            autoUpdater.downloadUpdate()
+                .catch(err => {
+                    event.sender.send('autoUpdateNotification', 'realerror', err)
+                })
             break
         case 'installUpdateNow':
             autoUpdater.quitAndInstall()
@@ -238,17 +246,30 @@ function createWindow() {
     })
     remoteMain.enable(win.webContents)
 
+    const bgDir = path.join(__dirname, 'app', 'assets', 'images', 'backgrounds')
+    const bgCount = fs.readdirSync(bgDir).length
+
+    let bkid
+    try {
+        const cfgPath = path.join(app.getPath('userData'), 'config.json')
+        if(fs.existsSync(cfgPath)) {
+            const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'))
+            const saved = cfg?.settings?.launcher?.background
+            bkid = (saved !== null && saved !== undefined) ? saved : Math.floor(Math.random() * bgCount)
+        } else {
+            bkid = Math.floor(Math.random() * bgCount)
+        }
+    } catch(e) {
+        bkid = Math.floor(Math.random() * bgCount)
+    }
+
     const data = {
-        bkid: Math.floor((Math.random() * fs.readdirSync(path.join(__dirname, 'app', 'assets', 'images', 'backgrounds')).length)),
+        bkid,
         lang: (str, placeHolders) => LangLoader.queryEJS(str, placeHolders)
     }
     Object.entries(data).forEach(([key, val]) => ejse.data(key, val))
 
     win.loadURL(pathToFileURL(path.join(__dirname, 'app', 'app.ejs')).toString())
-
-    /*win.once('ready-to-show', () => {
-        win.show()
-    })*/
 
     win.removeMenu()
 
