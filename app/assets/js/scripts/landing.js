@@ -256,8 +256,21 @@ const refreshServerStatus = async (fade = false) => {
         playerSample = servStat.players?.sample || []
 
     } catch (err) {
-        loggerLanding.warn('Unable to refresh server status, assuming offline.')
+        loggerLanding.warn('Ping moderne échoué, tentative ping legacy...')
         loggerLanding.debug(err)
+        // Fallback : ping legacy TCP (plus fiable sur les serveurs modpackés)
+        try {
+            const ServerStatus = require('../serverstatus')
+            const legacyStat = await ServerStatus.getStatus(serv.hostname, serv.port)
+            if(legacyStat.online) {
+                pLabel = Lang.queryJS('landing.serverStatus.players')
+                pVal = (legacyStat.onlinePlayers || '0') + '/' + (legacyStat.maxPlayers || '?')
+                isOnline = true
+            }
+        } catch (legacyErr) {
+            loggerLanding.warn('Ping legacy échoué aussi, serveur hors ligne.')
+            loggerLanding.debug(legacyErr)
+        }
     }
 
     const badge = document.getElementById('server_status_badge')
