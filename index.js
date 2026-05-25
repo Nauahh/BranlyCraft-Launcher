@@ -16,6 +16,16 @@ const LangLoader                        = require('./app/assets/js/langloader')
 // Setup Lang
 LangLoader.setupLanguage()
 
+// Nettoie le cache de mise à jour au démarrage pour éviter les conflits de version
+try {
+    const updaterPendingDir = path.join(app.getPath('appData'), 'branlycraftlauncher-updater', 'pending')
+    if(fs.existsSync(updaterPendingDir)){
+        fs.rmSync(updaterPendingDir, { recursive: true, force: true })
+    }
+} catch(e) {
+    // Silencieux — non bloquant
+}
+
 // Setup auto updater.
 function initAutoUpdater(event, data) {
 
