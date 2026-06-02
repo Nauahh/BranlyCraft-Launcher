@@ -239,18 +239,5 @@
         new MutationObserver(updateDot).observe(pc, { childList: true, subtree: true, characterData: true });
     })();
 
-    // Panneau infos
-    (function() {
-        const btn   = document.getElementById('infoButton');
-        const panel = document.getElementById('bc-info-panel');
-        const close = document.getElementById('bc-info-close');
-        if (!btn || !panel) return;
-        btn.addEventListener('click', () => {
-            panel.style.display = panel.style.display === 'none' ? 'flex' : 'none';
-        });
-        close.addEventListener('click', () => {
-            panel.style.display = 'none';
-        });
-    })();
     </script>
 </div>

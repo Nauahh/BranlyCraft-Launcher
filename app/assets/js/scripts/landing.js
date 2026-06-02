@@ -906,6 +906,18 @@ updatePlaytimeDisplay()
     })
 })()
 
+// Panneau infos serveur
+;(function() {
+    const btn   = document.getElementById('infoButton')
+    const panel = document.getElementById('bc-info-panel')
+    const close = document.getElementById('bc-info-close')
+    if(!btn || !panel) return
+    btn.onclick = () => {
+        panel.style.display = panel.style.display === 'none' ? 'flex' : 'none'
+    }
+    if(close) close.onclick = () => { panel.style.display = 'none' }
+})()
+
 // Screenshots shortcut
 ;(function() {
     const btn = document.getElementById('screenshotsBtn')
