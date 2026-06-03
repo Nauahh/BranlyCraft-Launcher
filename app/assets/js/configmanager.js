@@ -63,9 +63,12 @@ function resolveSelectedRAM(ram) {
     if(ram?.recommended != null) {
         return `${ram.recommended}M`
     } else {
-        // Legacy behavior
+        // Alloue automatiquement 70% de la RAM totale du PC
+        // Minimum 4 Go, maximum 16 Go pour éviter les abus
         const mem = os.totalmem()
-        return mem >= (8*1073741824) ? '4G' : (mem >= (6*1073741824) ? '3G' : '2G')
+        const seventyPercent = Math.floor(mem * 0.70 / 1073741824) // en Go
+        const clamped = Math.min(Math.max(seventyPercent, 4), 16)
+        return `${clamped}G`
     }
 }
 
