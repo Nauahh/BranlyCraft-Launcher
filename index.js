@@ -42,6 +42,8 @@ function initAutoUpdater(event, data) {
     }
     // Ne jamais télécharger automatiquement — l'utilisateur choisit quand installer
     autoUpdater.autoDownload = false
+    // Forcer le contournement du cache HTTP pour toujours récupérer la dernière version
+    autoUpdater.requestHeaders = { 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache' }
     autoUpdater.on('update-available', (info) => {
         event.sender.send('autoUpdateNotification', 'update-available', info)
     })
