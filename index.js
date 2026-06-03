@@ -150,7 +150,10 @@ ipcMain.on(MSFT_OPCODE.OPEN_LOGIN, (ipcEvent, ...arguments_) => {
         width: 520,
         height: 600,
         frame: true,
-        icon: getPlatformIcon('SealCircle')
+        icon: getPlatformIcon('SealCircle'),
+        webPreferences: {
+            partition: 'msft-auth-' + Date.now() // Session isolée et fraîche à chaque connexion
+        }
     })
 
     msftAuthWindow.on('closed', () => {

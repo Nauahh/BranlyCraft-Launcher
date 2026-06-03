@@ -196,22 +196,31 @@ async function fullMicrosoftAuthFlow(entryCode, authMode) {
             accessTokenRaw = entryCode
         }
         
+        log.info('Auth: XBL token...')
         const xblResponse = await MicrosoftAuth.getXBLToken(accessTokenRaw)
         if(xblResponse.responseStatus === RestResponseStatus.ERROR) {
+            log.error('Auth: Échec XBL -', xblResponse.microsoftErrorCode)
             return Promise.reject(microsoftErrorDisplayable(xblResponse.microsoftErrorCode))
         }
+        log.info('Auth: XSTS token...')
         const xstsResonse = await MicrosoftAuth.getXSTSToken(xblResponse.data)
         if(xstsResonse.responseStatus === RestResponseStatus.ERROR) {
+            log.error('Auth: Échec XSTS -', xstsResonse.microsoftErrorCode)
             return Promise.reject(microsoftErrorDisplayable(xstsResonse.microsoftErrorCode))
         }
+        log.info('Auth: MC access token...')
         const mcTokenResponse = await MicrosoftAuth.getMCAccessToken(xstsResonse.data)
         if(mcTokenResponse.responseStatus === RestResponseStatus.ERROR) {
+            log.error('Auth: Échec MC token -', mcTokenResponse.microsoftErrorCode)
             return Promise.reject(microsoftErrorDisplayable(mcTokenResponse.microsoftErrorCode))
         }
+        log.info('Auth: MC profil...')
         const mcProfileResponse = await MicrosoftAuth.getMCProfile(mcTokenResponse.data.access_token)
         if(mcProfileResponse.responseStatus === RestResponseStatus.ERROR) {
+            log.error('Auth: Échec profil MC -', mcProfileResponse.microsoftErrorCode)
             return Promise.reject(microsoftErrorDisplayable(mcProfileResponse.microsoftErrorCode))
         }
+        log.info('Auth: Succès !')
         return {
             accessToken,
             accessTokenRaw,
@@ -221,7 +230,7 @@ async function fullMicrosoftAuthFlow(entryCode, authMode) {
             mcProfile: mcProfileResponse.data
         }
     } catch(err) {
-        log.error(err)
+        log.error('Auth: Exception inattendue:', err)
         return Promise.reject(microsoftErrorDisplayable(MicrosoftErrorCode.UNKNOWN))
     }
 }
