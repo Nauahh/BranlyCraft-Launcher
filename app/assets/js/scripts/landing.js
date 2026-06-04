@@ -3,6 +3,8 @@
  */
 // Requirements
 const { URL }                 = require('url')
+let ServerStatus = null
+try { ServerStatus = require('../serverstatus') } catch(e) { /* fallback si module absent */ }
 const {
     MojangRestAPI,
     getServerStatus
@@ -260,7 +262,7 @@ const refreshServerStatus = async (fade = false) => {
         loggerLanding.debug(err)
         // Fallback : ping legacy TCP (plus fiable sur les serveurs modpackés)
         try {
-            const ServerStatus = require('../serverstatus')
+            if(!ServerStatus) throw new Error('serverstatus non disponible')
             const legacyStat = await ServerStatus.getStatus(serv.hostname, serv.port)
             if(legacyStat.online) {
                 pLabel = Lang.queryJS('landing.serverStatus.players')
